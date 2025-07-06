@@ -1,128 +1,124 @@
-class Message {
-  final int id;
-  final String username;
+class ChatPost {
+  final int postId;
+  final String author;
   final String content;
-  final DateTime timestamp;
+  final DateTime createdAt;
 
-  Message({
-    required this.id,
-    required this.username,
+  ChatPost({
+    required this.postId,
+    required this.author,
     required this.content,
-    required this.timestamp,
+    required this.createdAt,
   });
 
-  factory Message.fromJson(Map<String, dynamic> json) {
+  factory ChatPost.fromJson(Map<String, dynamic> json) {
     try {
       final timestamp = json['timestamp'] is String
           ? DateTime.parse(json['timestamp'])
-          : DateTime.now(); // fallback
+          : DateTime.now();
 
-      return Message(
-        id: int.parse(json['id'].toString()),
-        username: json['username'].toString(),
+      return ChatPost(
+        postId: int.parse(json['id'].toString()),
+        author: json['username'].toString(),
         content: json['content'].toString(),
-        timestamp: timestamp,
+        createdAt: timestamp,
       );
     } catch (e, stack) {
-      print('Error parsing Message: $e');
-      print('Stack trace: $stack');
-      print('JSON data: $json');
-      throw FormatException('Failed to parse Message: ${e.toString()}');
+      print('Error parsing post: $e\n$stack\nData: $json');
+      throw FormatException('Post parsing failed: $e');
     }
   }
 }
 
-class CreateMessageRequest {
-  final String username;
-  final String content;
+class CreatePostRequest {
+  final String author;
+  final String message;
 
-  CreateMessageRequest({
-    required this.username,
-    required this.content,
+  CreatePostRequest({
+    required this.author,
+    required this.message,
   });
 
-  Map<String, dynamic> toJson() {
-    return {
-      'username': username,
-      'content': content,
-    };
-  }
+  Map<String, dynamic> toJson() => {
+        'username': author,
+        'content': message,
+      };
 
   String? validate() {
-    if (username.isEmpty) return "Username is required";
-    if (content.isEmpty) return "Content is required";
+    if (author.isEmpty) return "Author name is required";
+    if (message.isEmpty) return "Message content is required";
     return null;
   }
 }
 
-class UpdateMessageRequest {
-  final String content;
+class UpdatePostRequest {
+  final String newContent;
 
-  UpdateMessageRequest({
-    required this.content,
+  UpdatePostRequest({
+    required this.newContent,
   });
 
-  Map<String, dynamic> toJson() {
-    return {
-      'content': content,
-    };
-  }
+  Map<String, dynamic> toJson() => {
+        'content': newContent,
+      };
 
   String? validate() {
-    if (content.isEmpty) return "Content is required";
+    if (newContent.isEmpty) return "Message cannot be empty";
     return null;
   }
 }
 
-class HTTPStatusResponse {
+class HttpStatusInfo {
   final int statusCode;
-  final String imageUrl;
-  final String description;
+  final String imageLink;
+  final String statusText;
 
-  HTTPStatusResponse({
+  HttpStatusInfo({
     required this.statusCode,
-    required this.imageUrl,
-    required this.description,
+    required this.imageLink,
+    required this.statusText,
   });
 
-  factory HTTPStatusResponse.fromJson(Map<String, dynamic> json) {
-    return HTTPStatusResponse(
+  factory HttpStatusInfo.fromJson(Map<String, dynamic> json) {
+    return HttpStatusInfo(
       statusCode: int.tryParse(json['status_code'].toString()) ?? 0,
-      imageUrl: json['image_url']?.toString() ?? '',
-      description: json['description']?.toString() ?? '',
+      imageLink: json['image_url']?.toString() ?? '',
+      statusText: json['description']?.toString() ?? '',
     );
   }
 }
 
-class ApiResponse<T> {
-  final bool success;
-  final T? data;
-  final String? error;
+class ApiResult<T> {
+  final bool isSuccess;
+  final T? resultData;
+  final String? errorMessage;
 
-  ApiResponse({
-    required this.success,
-    this.data,
-    this.error,
+  ApiResult({
+    required this.isSuccess,
+    this.resultData,
+    this.errorMessage,
   });
 
-  factory ApiResponse.fromJson(
+  factory ApiResult.fromJson(
     Map<String, dynamic> json,
-    T Function(Map<String, dynamic>)? fromJsonT,
+    T Function(Map<String, dynamic>)? parseData,
   ) {
-    return ApiResponse<T>(
-      success: json['success'] as bool,
-      data: json['data'] != null && fromJsonT != null
-          ? fromJsonT(json['data'])
+    return ApiResult<T>(
+      isSuccess: json['success'] as bool,
+      resultData: json['data'] != null && parseData != null
+          ? parseData(json['data'])
           : null,
-      error: json['error'] as String?,
+      errorMessage: json['error'] as String?,
     );
   }
 
-  Map<String, dynamic> toJson(T Function(T)? toJsonT) {
+  Map<String, dynamic> toJson(T Function(T)? convertData) {
     return {
-      'success': success,
-      'data': data != null && toJsonT != null ? toJsonT(data!) : data,
-      'error': error,
+      'success': isSuccess,
+      'data': resultData != null && convertData != null
+          ? convertData(resultData!)
+          : resultData,
+      'error': errorMessage,
     };
   }
 }
