@@ -2,6 +2,7 @@ package storage
 
 import (
 	"errors"
+	"fmt"
 	"lab03-backend/models"
 	"sync"
 )
@@ -16,6 +17,7 @@ type MemoryStorage struct {
 // NewMemoryStorage creates a new in-memory storage instance
 func NewMemoryStorage() *MemoryStorage {
 	return &MemoryStorage{
+		mu:       sync.RWMutex{},
 		messages: make(map[int]*models.Message),
 		nextID:   1,
 	}
@@ -26,10 +28,11 @@ func (ms *MemoryStorage) GetAll() []*models.Message {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 
-	messages := make([]*models.Message, 0, len(ms.messages))
+	var messages []*models.Message
 	for _, msg := range ms.messages {
 		messages = append(messages, msg)
 	}
+
 	return messages
 }
 
@@ -38,11 +41,11 @@ func (ms *MemoryStorage) GetByID(id int) (*models.Message, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 
-	msg, exists := ms.messages[id]
-	if !exists {
-		return nil, ErrMessageNotFound
+	if msg, exists := ms.messages[id]; exists {
+		return msg, nil
 	}
-	return msg, nil
+
+	return nil, ErrMessageNotFound
 }
 
 // Create adds a new message to storage
@@ -50,9 +53,10 @@ func (ms *MemoryStorage) Create(username, content string) (*models.Message, erro
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 
-	id := ms.nextID
-	msg := models.NewMessage(id, username, content)
-	ms.messages[id] = msg
+	msg := models.NewMessage(ms.nextID, username, content)
+	fmt.Printf("Creating message: ID=%d, Username=%s, Content=%s\n", msg.ID, msg.Username, msg.Content) // Логирование
+
+	ms.messages[ms.nextID] = msg
 	ms.nextID++
 	return msg, nil
 }
@@ -62,13 +66,12 @@ func (ms *MemoryStorage) Update(id int, content string) (*models.Message, error)
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 
-	msg, exists := ms.messages[id]
-	if !exists {
-		return nil, ErrMessageNotFound
+	if msg, exists := ms.messages[id]; exists {
+		msg.Content = content
+		return msg, nil
 	}
 
-	msg.Content = content
-	return msg, nil
+	return nil, ErrMessageNotFound
 }
 
 // Delete removes a message from storage
@@ -76,19 +79,17 @@ func (ms *MemoryStorage) Delete(id int) error {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 
-	if _, exists := ms.messages[id]; !exists {
-		return ErrMessageNotFound
+	if _, exists := ms.messages[id]; exists {
+		delete(ms.messages, id)
+		return nil
 	}
-
-	delete(ms.messages, id)
-	return nil
+	return ErrMessageNotFound
 }
 
 // Count returns the total number of messages
 func (ms *MemoryStorage) Count() int {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
-
 	return len(ms.messages)
 }
 

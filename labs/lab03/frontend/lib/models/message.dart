@@ -12,21 +12,23 @@ class Message {
   });
 
   factory Message.fromJson(Map<String, dynamic> json) {
-    return Message(
-      id: json["id"] as int,
-      username: json['username'] as String,
-      content: json['content'] as String,
-      timestamp: DateTime.parse(json['timestamp'] as String),
-    );
-  }
+    try {
+      final timestamp = json['timestamp'] is String
+          ? DateTime.parse(json['timestamp'])
+          : DateTime.now(); // fallback
 
-  Map<String, dynamic> toJson() {
-    return {
-      "id": id,
-      "username": username,
-      "content": content,
-      "timestamp": timestamp.toIso8601String(),
-    };
+      return Message(
+        id: int.parse(json['id'].toString()),
+        username: json['username'].toString(),
+        content: json['content'].toString(),
+        timestamp: timestamp,
+      );
+    } catch (e, stack) {
+      print('Error parsing Message: $e');
+      print('Stack trace: $stack');
+      print('JSON data: $json');
+      throw FormatException('Failed to parse Message: ${e.toString()}');
+    }
   }
 }
 
@@ -34,12 +36,15 @@ class CreateMessageRequest {
   final String username;
   final String content;
 
-  CreateMessageRequest({required this.username, required this.content});
+  CreateMessageRequest({
+    required this.username,
+    required this.content,
+  });
 
   Map<String, dynamic> toJson() {
     return {
-      "username": username,
-      "content": content,
+      'username': username,
+      'content': content,
     };
   }
 
@@ -53,11 +58,13 @@ class CreateMessageRequest {
 class UpdateMessageRequest {
   final String content;
 
-  UpdateMessageRequest({required this.content});
+  UpdateMessageRequest({
+    required this.content,
+  });
 
   Map<String, dynamic> toJson() {
     return {
-      "content": content,
+      'content': content,
     };
   }
 
@@ -80,9 +87,9 @@ class HTTPStatusResponse {
 
   factory HTTPStatusResponse.fromJson(Map<String, dynamic> json) {
     return HTTPStatusResponse(
-      statusCode: json['status_code'] as int,
-      imageUrl: json['image_url'] as String,
-      description: json['description'] as String,
+      statusCode: int.tryParse(json['status_code'].toString()) ?? 0,
+      imageUrl: json['image_url']?.toString() ?? '',
+      description: json['description']?.toString() ?? '',
     );
   }
 }
@@ -98,11 +105,24 @@ class ApiResponse<T> {
     this.error,
   });
 
-  factory ApiResponse.fromJsonT(Map<String, dynamic> json) {
+  factory ApiResponse.fromJson(
+    Map<String, dynamic> json,
+    T Function(Map<String, dynamic>)? fromJsonT,
+  ) {
     return ApiResponse<T>(
       success: json['success'] as bool,
-      data: json['data'],
-      error: json['error'],
+      data: json['data'] != null && fromJsonT != null
+          ? fromJsonT(json['data'])
+          : null,
+      error: json['error'] as String?,
     );
+  }
+
+  Map<String, dynamic> toJson(T Function(T)? toJsonT) {
+    return {
+      'success': success,
+      'data': data != null && toJsonT != null ? toJsonT(data!) : data,
+      'error': error,
+    };
   }
 }

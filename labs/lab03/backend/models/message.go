@@ -1,7 +1,7 @@
 package models
 
 import (
-	"errors"
+	"fmt"
 	"time"
 )
 
@@ -51,18 +51,21 @@ func NewMessage(id int, username, content string) *Message {
 // Validate checks if the create message request is valid
 func (r *CreateMessageRequest) Validate() error {
 	if r.Username == "" {
-		return errors.New("username is required")
+		return fmt.Errorf("username is required")
 	}
+
 	if r.Content == "" {
-		return errors.New("content is required")
+		return fmt.Errorf("content is required")
 	}
+
 	return nil
 }
 
 // Validate checks if the update message request is valid
 func (r *UpdateMessageRequest) Validate() error {
 	if r.Content == "" {
-		return errors.New("content is required")
+		return fmt.Errorf("content is required")
 	}
+
 	return nil
 }
