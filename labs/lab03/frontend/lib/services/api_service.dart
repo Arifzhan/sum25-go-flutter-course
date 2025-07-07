@@ -7,7 +7,9 @@ class ApiService {
   static const Duration timeout = Duration(seconds: 30);
   late http.Client _client;
 
-  ApiService({http.Client? client}) : _client = client ?? http.Client();
+  ApiService({http.Client? client}) {
+    _client = client ?? http.Client();
+  }
 
   void dispose() {
     _client.close();
@@ -20,24 +22,46 @@ class ApiService {
     };
   }
 
+  T _handleResponse<T>(
+    http.Response response,
+    T Function(Map<String, dynamic>) fromJson,
+  ) {
+    if (response.statusCode >= 200 && response.statusCode <= 299) {
+      final decodedData = json.decode(response.body);
+      return fromJson(decodedData);
+    } else if (response.statusCode >= 400 && response.statusCode <= 499) {
+      final errorData = json.decode(response.body);
+      throw ApiException(errorData['error'] ?? 'Client error');
+    } else if (response.statusCode >= 500 && response.statusCode <= 599) {
+      throw ServerException('Server error: ${response.statusCode}');
+    } else {
+      throw ApiException('Unexpected error: ${response.statusCode}');
+    }
+  }
+
   Future<List<Message>> getMessages() async {
     try {
       final response = await _client
-          .get(Uri.parse('$baseUrl/api/messages'))
+          .get(
+            Uri.parse('$baseUrl/api/messages'),
+            headers: _getHeaders(),
+          )
           .timeout(timeout);
 
-      if (response.statusCode == 200) {
-        final decoded = json.decode(response.body);
-        if (decoded['success'] == true) {
-          final data = decoded['data'] as List;
-          return data.map((json) => Message.fromJson(json)).toList();
-        }
-        throw ApiException(decoded['error'] ?? 'Failed to get messages');
+      final apiResponse = _handleResponse<ApiResponse<List<Message>>>(
+        response,
+        (json) => ApiResponse.fromJson(json, null),
+      );
+
+      if (apiResponse.success && apiResponse.data != null) {
+        final List<dynamic> messagesList = apiResponse.data as List<dynamic>;
+        return messagesList.map((json) => Message.fromJson(json)).toList();
+      } else {
+        throw ApiException(apiResponse.error ?? 'Failed to get messages');
       }
-      throw ApiException('Server returned ${response.statusCode}');
     } catch (e) {
       if (e is ApiException) rethrow;
-      throw NetworkException('Network error: ${e.toString()}');
+      throw ApiException('Failed to get messages: ${e.toString()}');
     }
   }
 
@@ -56,17 +80,22 @@ class ApiService {
           )
           .timeout(timeout);
 
-      if (response.statusCode == 201) {
-        final decoded = json.decode(response.body);
-        if (decoded['success'] == true) {
-          return Message.fromJson(decoded['data']);
-        }
-        throw ApiException(decoded['error'] ?? 'Failed to create message');
+      final apiResponse = _handleResponse<ApiResponse<Message>>(
+        response,
+        (json) => ApiResponse.fromJson(
+          json,
+          (data) => Message.fromJson(data),
+        ),
+      );
+
+      if (apiResponse.success && apiResponse.data != null) {
+        return apiResponse.data!;
+      } else {
+        throw ApiException(apiResponse.error ?? 'Failed to create message');
       }
-      throw ApiException('Server returned ${response.statusCode}');
     } catch (e) {
       if (e is ApiException) rethrow;
-      throw NetworkException('Network error: ${e.toString()}');
+      throw ApiException('Failed to create message: ${e.toString()}');
     }
   }
 
@@ -85,24 +114,32 @@ class ApiService {
           )
           .timeout(timeout);
 
-      if (response.statusCode == 200) {
-        final decoded = json.decode(response.body);
-        if (decoded['success'] == true) {
-          return Message.fromJson(decoded['data']);
-        }
-        throw ApiException(decoded['error'] ?? 'Failed to update message');
+      final apiResponse = _handleResponse<ApiResponse<Message>>(
+        response,
+        (json) => ApiResponse.fromJson(
+          json,
+          (data) => Message.fromJson(data),
+        ),
+      );
+
+      if (apiResponse.success && apiResponse.data != null) {
+        return apiResponse.data!;
+      } else {
+        throw ApiException(apiResponse.error ?? 'Failed to update message');
       }
-      throw ApiException('Server returned ${response.statusCode}');
     } catch (e) {
       if (e is ApiException) rethrow;
-      throw NetworkException('Network error: ${e.toString()}');
+      throw ApiException('Failed to update message: ${e.toString()}');
     }
   }
 
   Future<void> deleteMessage(int id) async {
     try {
       final response = await _client
-          .delete(Uri.parse('$baseUrl/api/messages/$id'))
+          .delete(
+            Uri.parse('$baseUrl/api/messages/$id'),
+            headers: _getHeaders(),
+          )
           .timeout(timeout);
 
       if (response.statusCode != 204) {
@@ -110,52 +147,67 @@ class ApiService {
       }
     } catch (e) {
       if (e is ApiException) rethrow;
-      throw NetworkException('Network error: ${e.toString()}');
+      throw ApiException('Failed to delete message: ${e.toString()}');
     }
   }
 
   Future<HTTPStatusResponse> getHTTPStatus(int statusCode) async {
     if (statusCode < 100 || statusCode > 599) {
-      throw ValidationException('Invalid HTTP status code');
+      throw ValidationException('Invalid HTTP status code: $statusCode');
     }
 
     try {
       final response = await _client
-          .get(Uri.parse('$baseUrl/api/status/$statusCode'))
+          .get(
+            Uri.parse('$baseUrl/api/status/$statusCode'),
+            headers: _getHeaders(),
+          )
           .timeout(timeout);
 
-      if (response.statusCode == 200) {
-        final decoded = json.decode(response.body);
-        if (decoded['success'] == true) {
-          return HTTPStatusResponse.fromJson(decoded['data']);
-        }
-        throw ApiException(decoded['error'] ?? 'Failed to get HTTP status');
+      final apiResponse = _handleResponse<ApiResponse<HTTPStatusResponse>>(
+        response,
+        (json) => ApiResponse.fromJson(
+          json,
+          (data) => HTTPStatusResponse.fromJson(data),
+        ),
+      );
+
+      if (apiResponse.success && apiResponse.data != null) {
+        return apiResponse.data!;
+      } else {
+        throw ApiException(apiResponse.error ?? 'Failed to get HTTP status');
       }
-      throw ApiException('Server returned ${response.statusCode}');
     } catch (e) {
-      if (e is ApiException) rethrow;
-      throw NetworkException('Network error: ${e.toString()}');
+      if (e is ApiException || e is ValidationException) rethrow;
+      throw ApiException('Failed to get HTTP status: ${e.toString()}');
     }
   }
 
   Future<Map<String, dynamic>> healthCheck() async {
     try {
-      final response =
-          await _client.get(Uri.parse('$baseUrl/api/health')).timeout(timeout);
+      final response = await _client
+          .get(
+            Uri.parse('$baseUrl/api/health'),
+            headers: _getHeaders(),
+          )
+          .timeout(timeout);
 
       if (response.statusCode == 200) {
         return json.decode(response.body);
+      } else {
+        throw ApiException('Health check failed');
       }
-      throw ApiException('Health check failed');
     } catch (e) {
       if (e is ApiException) rethrow;
-      throw NetworkException('Network error: ${e.toString()}');
+      throw ApiException('Failed to perform health check: ${e.toString()}');
     }
   }
 }
 
+// Custom exceptions
 class ApiException implements Exception {
   final String message;
+
   ApiException(this.message);
 
   @override
