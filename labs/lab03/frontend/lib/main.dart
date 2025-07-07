@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'screens/chat_screen.dart';
 import 'services/api_service.dart';
+import 'models/message.dart';
 
 void main() {
   runApp(const MyApp());
@@ -18,10 +19,10 @@ class MyApp extends StatelessWidget {
           create: (_) => ApiService(),
           dispose: (_, apiService) => apiService.dispose(),
         ),
-        ChangeNotifierProxyProvider<ApiService, ChatProvider>(
-          create: (context) => ChatProvider(context.read<ApiService>()),
-          update: (context, apiService, chatProvider) =>
-              chatProvider ?? ChatProvider(apiService),
+        ChangeNotifierProvider<ChatProvider>(
+          create: (context) => ChatProvider(
+            context.read<ApiService>(),
+          ),
         ),
       ],
       child: MaterialApp(
@@ -62,10 +63,8 @@ class ChatProvider extends ChangeNotifier {
 
     try {
       _messages = await _apiService.getMessages();
-    } on ApiException catch (e) {
-      _error = e.message;
     } catch (e) {
-      _error = 'An unexpected error occurred';
+      _error = e.toString();
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -79,10 +78,8 @@ class ChatProvider extends ChangeNotifier {
     try {
       final message = await _apiService.createMessage(request);
       _messages.insert(0, message);
-    } on ApiException catch (e) {
-      _error = e.message;
     } catch (e) {
-      _error = 'Failed to send message';
+      _error = e.toString();
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -99,10 +96,8 @@ class ChatProvider extends ChangeNotifier {
       if (index != -1) {
         _messages[index] = updatedMessage;
       }
-    } on ApiException catch (e) {
-      _error = e.message;
     } catch (e) {
-      _error = 'Failed to update message';
+      _error = e.toString();
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -116,10 +111,8 @@ class ChatProvider extends ChangeNotifier {
     try {
       await _apiService.deleteMessage(id);
       _messages.removeWhere((m) => m.id == id);
-    } on ApiException catch (e) {
-      _error = e.message;
     } catch (e) {
-      _error = 'Failed to delete message';
+      _error = e.toString();
     } finally {
       _isLoading = false;
       notifyListeners();
