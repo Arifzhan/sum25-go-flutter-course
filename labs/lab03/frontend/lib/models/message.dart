@@ -1,3 +1,8 @@
+import 'package:json_annotation/json_annotation.dart';
+
+part 'message.g.dart';
+
+@JsonSerializable()
 class Message {
   final int id;
   final String username;
@@ -11,23 +16,13 @@ class Message {
     required this.timestamp,
   });
 
-  factory Message.fromJson(Map<String, dynamic> json) {
-    return Message(
-      id: json['id'],
-      username: json['username'],
-      content: json['content'],
-      timestamp: DateTime.parse(json['timestamp']),
-    );
-  }
+  factory Message.fromJson(Map<String, dynamic> json) =>
+      _$MessageFromJson(json);
 
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'username': username,
-        'content': content,
-        'timestamp': timestamp.toIso8601String(),
-      };
+  Map<String, dynamic> toJson() => _$MessageToJson(this);
 }
 
+@JsonSerializable()
 class CreateMessageRequest {
   final String username;
   final String content;
@@ -37,14 +32,62 @@ class CreateMessageRequest {
     required this.content,
   });
 
-  Map<String, dynamic> toJson() => {
-        'username': username,
-        'content': content,
-      };
-
   String? validate() {
-    if (username.isEmpty) return 'Username is required';
-    if (content.isEmpty) return 'Content is required';
+    if (username.isEmpty) return "Username is required";
+    if (content.isEmpty) return "Content is required";
     return null;
   }
+
+  Map<String, dynamic> toJson() => _$CreateMessageRequestToJson(this);
+}
+
+@JsonSerializable()
+class UpdateMessageRequest {
+  final String content;
+
+  UpdateMessageRequest({
+    required this.content,
+  });
+
+  String? validate() {
+    if (content.isEmpty) return "Content is required";
+    return null;
+  }
+
+  Map<String, dynamic> toJson() => _$UpdateMessageRequestToJson(this);
+}
+
+@JsonSerializable()
+class HTTPStatusResponse {
+  final int statusCode;
+  final String imageUrl;
+  final String description;
+
+  HTTPStatusResponse({
+    required this.statusCode,
+    required this.imageUrl,
+    required this.description,
+  });
+
+  factory HTTPStatusResponse.fromJson(Map<String, dynamic> json) =>
+      _$HTTPStatusResponseFromJson(json);
+}
+
+@JsonSerializable(genericArgumentFactories: true)
+class ApiResponse<T> {
+  final bool success;
+  final T? data;
+  final String? error;
+
+  ApiResponse({
+    required this.success,
+    this.data,
+    this.error,
+  });
+
+  factory ApiResponse.fromJson(
+    Map<String, dynamic> json,
+    T Function(Map<String, dynamic>) fromJsonT,
+  ) =>
+      _$ApiResponseFromJson(json, fromJsonT);
 }
