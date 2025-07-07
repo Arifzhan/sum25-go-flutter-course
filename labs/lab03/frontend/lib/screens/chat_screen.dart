@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/message.dart';
 import '../services/api_service.dart';
 import '../main.dart';
+import 'dart:math';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({Key? key}) : super(key: key);
@@ -239,7 +240,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildErrorWidget() {
+  Widget _buildErrorWidget(String? error) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -247,7 +248,7 @@ class _ChatScreenState extends State<ChatScreen> {
           const Icon(Icons.error_outline, color: Colors.red, size: 48),
           const SizedBox(height: 16),
           Text(
-            Provider.of<ChatProvider>(context).error ?? 'An error occurred',
+            error ?? 'An error occurred',
             style: const TextStyle(color: Colors.red),
           ),
           const SizedBox(height: 16),
@@ -284,7 +285,7 @@ class _ChatScreenState extends State<ChatScreen> {
       body: chatProvider.isLoading
           ? _buildLoadingWidget()
           : chatProvider.error != null
-              ? _buildErrorWidget()
+              ? _buildErrorWidget(chatProvider.error)
               : chatProvider.messages.isEmpty
                   ? const Center(
                       child: Column(
@@ -308,99 +309,6 @@ class _ChatScreenState extends State<ChatScreen> {
       floatingActionButton: FloatingActionButton(
         onPressed: chatProvider.loadMessages,
         child: const Icon(Icons.refresh),
-      ),
-    );
-  }
-}
-
-class HTTPStatusDemo {
-  static void showRandomStatus(BuildContext context, ApiService apiService) {
-    final randomStatus = [200, 201, 400, 404, 500][DateTime.now().second % 5];
-    _showStatusDialog(context, apiService, randomStatus);
-  }
-
-  static void showStatusPicker(BuildContext context, ApiService apiService) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Select HTTP Status'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildStatusButton(context, apiService, 100, 'Continue'),
-            _buildStatusButton(context, apiService, 200, 'OK'),
-            _buildStatusButton(context, apiService, 201, 'Created'),
-            _buildStatusButton(context, apiService, 400, 'Bad Request'),
-            _buildStatusButton(context, apiService, 401, 'Unauthorized'),
-            _buildStatusButton(context, apiService, 403, 'Forbidden'),
-            _buildStatusButton(context, apiService, 404, 'Not Found'),
-            _buildStatusButton(context, apiService, 418, 'I\'m a teapot'),
-            _buildStatusButton(
-                context, apiService, 500, 'Internal Server Error'),
-            _buildStatusButton(context, apiService, 503, 'Service Unavailable'),
-          ],
-        ),
-      ),
-    );
-  }
-
-  static Widget _buildStatusButton(
-      BuildContext context, ApiService apiService, int code, String text) {
-    return TextButton(
-      onPressed: () {
-        Navigator.pop(context);
-        _showStatusDialog(context, apiService, code);
-      },
-      child: Text('$code $text'),
-    );
-  }
-
-  static void _showStatusDialog(
-      BuildContext context, ApiService apiService, int code) {
-    showDialog(
-      context: context,
-      builder: (context) => FutureBuilder<HTTPStatusResponse>(
-        future: apiService.getHTTPStatus(code),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return AlertDialog(
-              title: Text('Error: $code'),
-              content: Text(snapshot.error.toString()),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Close'),
-                ),
-              ],
-            );
-          }
-
-          if (!snapshot.hasData) {
-            return const AlertDialog(
-              title: Text('Loading...'),
-              content: Center(child: CircularProgressIndicator()),
-            );
-          }
-
-          final status = snapshot.data!;
-          return AlertDialog(
-            title: Text('HTTP Status: ${status.statusCode}'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(status.description),
-                const SizedBox(height: 16),
-                Image.network(status.imageUrl),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
-              ),
-            ],
-          );
-        },
       ),
     );
   }

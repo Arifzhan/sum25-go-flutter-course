@@ -19,46 +19,33 @@ class MyApp extends StatelessWidget {
           create: (_) => ApiService(),
           dispose: (_, apiService) => apiService.dispose(),
         ),
-        ChangeNotifierProxyProvider<ApiService, ChatProvider>(
+        ChangeNotifierProvider<ChatProvider>(
           create: (context) => ChatProvider(
-            context.read<ApiService>(),
+            Provider.of<ApiService>(context, listen: false),
           ),
-          update: (context, apiService, chatProvider) =>
-              chatProvider ?? ChatProvider(apiService),
         ),
       ],
       child: MaterialApp(
-        title: 'REST API Chat',
-        debugShowCheckedModeBanner: false,
+        title: 'Lab 03 REST API Chat',
         theme: ThemeData(
+          primarySwatch: Colors.blue,
           colorScheme: ColorScheme.fromSeed(
             seedColor: Colors.blue,
             secondary: Colors.orange,
           ),
           appBarTheme: const AppBarTheme(
-            centerTitle: true,
-            elevation: 1,
-            titleTextStyle: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
+            backgroundColor: Colors.blue,
+            foregroundColor: Colors.white,
           ),
           elevatedButtonTheme: ElevatedButtonThemeData(
             style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
             ),
           ),
           useMaterial3: true,
         ),
         home: const ChatScreen(),
-        onUnknownRoute: (settings) => MaterialPageRoute(
-          builder: (context) => const Scaffold(
-            body: Center(child: Text('Page not found')),
-          ),
-        ),
       ),
     );
   }

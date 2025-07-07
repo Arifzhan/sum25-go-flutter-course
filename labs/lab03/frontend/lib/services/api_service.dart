@@ -204,7 +204,6 @@ class ApiService {
   }
 }
 
-// Custom exceptions
 class ApiException implements Exception {
   final String message;
 
