@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/message.dart';
 import '../services/api_service.dart';
-import 'package:intl/intl.dart';
+import '../providers/chat_provider.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({Key? key}) : super(key: key);
@@ -46,29 +46,20 @@ class _ChatScreenState extends State<ChatScreen> {
       content: content,
     );
 
-    try {
-      await Provider.of<ChatProvider>(context, listen: false)
-          .createMessage(request);
-      _messageController.clear();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Message sent successfully')),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to send message: $e')),
-      );
-    }
+    await Provider.of<ChatProvider>(context, listen: false)
+        .createMessage(request);
+    _messageController.clear();
   }
 
   Future<void> _editMessage(Message message) async {
-    final controller = TextEditingController(text: message.content);
-    await showDialog(
+    final contentController = TextEditingController(text: message.content);
+    final updatedContent = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Edit Message'),
         content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(hintText: 'Edit your message'),
+          controller: contentController,
+          decoration: const InputDecoration(hintText: 'Enter new message'),
         ),
         actions: [
           TextButton(
@@ -76,34 +67,18 @@ class _ChatScreenState extends State<ChatScreen> {
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () async {
-              final content = controller.text.trim();
-              if (content.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Message cannot be empty')),
-                );
-                return;
-              }
-
-              final request = UpdateMessageRequest(content: content);
-              try {
-                await Provider.of<ChatProvider>(context, listen: false)
-                    .updateMessage(message.id, request);
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Message updated')),
-                );
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Failed to update: $e')),
-                );
-              }
-            },
+            onPressed: () => Navigator.pop(context, contentController.text),
             child: const Text('Save'),
           ),
         ],
       ),
     );
+
+    if (updatedContent != null && updatedContent != message.content) {
+      final request = UpdateMessageRequest(content: updatedContent);
+      await Provider.of<ChatProvider>(context, listen: false)
+          .updateMessage(message.id, request);
+    }
   }
 
   Future<void> _deleteMessage(Message message) async {
@@ -126,24 +101,14 @@ class _ChatScreenState extends State<ChatScreen> {
     );
 
     if (confirmed == true) {
-      try {
-        await Provider.of<ChatProvider>(context, listen: false)
-            .deleteMessage(message.id);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Message deleted')),
-        );
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to delete: $e')),
-        );
-      }
+      await Provider.of<ChatProvider>(context, listen: false)
+          .deleteMessage(message.id);
     }
   }
 
   Future<void> _showHTTPStatus(int statusCode) async {
     try {
-      final status = await Provider.of<ChatProvider>(context, listen: false)
-          ._apiService
+      final status = await Provider.of<ApiService>(context, listen: false)
           .getHTTPStatus(statusCode);
       showDialog(
         context: context,
@@ -154,22 +119,7 @@ class _ChatScreenState extends State<ChatScreen> {
             children: [
               Text(status.description),
               const SizedBox(height: 16),
-              Image.network(
-                status.imageUrl,
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Center(
-                    child: CircularProgressIndicator(
-                      value: loadingProgress.expectedTotalBytes != null
-                          ? loadingProgress.cumulativeBytesLoaded /
-                              loadingProgress.expectedTotalBytes!
-                          : null,
-                    ),
-                  );
-                },
-                errorBuilder: (context, error, stackTrace) =>
-                    const Icon(Icons.error),
-              ),
+              Image.network(status.imageUrl),
             ],
           ),
           actions: [
@@ -180,9 +130,9 @@ class _ChatScreenState extends State<ChatScreen> {
           ],
         ),
       );
-    } catch (e) {
+    } on ApiException catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to get status: $e')),
+        SnackBar(content: Text(e.toString())),
       );
     }
   }
@@ -197,8 +147,8 @@ class _ChatScreenState extends State<ChatScreen> {
           Text(message.username),
           const SizedBox(width: 8),
           Text(
-            DateFormat('HH:mm').format(message.timestamp),
-            style: Theme.of(context).textTheme.caption,
+            '${message.timestamp.hour}:${message.timestamp.minute.toString().padLeft(2, '0')}',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
       ),
@@ -223,8 +173,9 @@ class _ChatScreenState extends State<ChatScreen> {
         },
       ),
       onTap: () {
-        final randomStatus = [200, 404, 500][DateTime.now().second % 3];
-        _showHTTPStatus(randomStatus);
+        final statusCodes = [200, 404, 500];
+        final randomCode = statusCodes[(message.id % statusCodes.length)];
+        _showHTTPStatus(randomCode);
       },
     );
   }
@@ -234,12 +185,11 @@ class _ChatScreenState extends State<ChatScreen> {
       padding: const EdgeInsets.all(16),
       color: Colors.grey[200],
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         children: [
           TextField(
             controller: _usernameController,
             decoration: const InputDecoration(
-              labelText: 'Enter your username',
+              hintText: 'Enter your username',
               border: OutlineInputBorder(),
             ),
           ),
@@ -247,7 +197,7 @@ class _ChatScreenState extends State<ChatScreen> {
           TextField(
             controller: _messageController,
             decoration: const InputDecoration(
-              labelText: 'Enter your message',
+              hintText: 'Enter your message',
               border: OutlineInputBorder(),
             ),
             maxLines: 3,
@@ -271,11 +221,6 @@ class _ChatScreenState extends State<ChatScreen> {
                 onPressed: () => _showHTTPStatus(404),
                 child: const Text('404'),
               ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: () => _showHTTPStatus(500),
-                child: const Text('500'),
-              ),
             ],
           ),
         ],
@@ -283,17 +228,14 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildErrorWidget() {
+  Widget _buildErrorWidget(String error) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const Icon(Icons.error_outline, color: Colors.red, size: 48),
           const SizedBox(height: 16),
-          const Text(
-            'Failed to load messages',
-            style: TextStyle(color: Colors.red),
-          ),
+          Text(error, style: const TextStyle(color: Colors.red)),
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: () => Provider.of<ChatProvider>(context, listen: false)
@@ -321,14 +263,14 @@ class _ChatScreenState extends State<ChatScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () => chatProvider.refreshMessages(),
+            onPressed: chatProvider.refreshMessages,
           ),
         ],
       ),
       body: chatProvider.isLoading && chatProvider.messages.isEmpty
           ? _buildLoadingWidget()
           : chatProvider.error != null
-              ? _buildErrorWidget()
+              ? _buildErrorWidget(chatProvider.error!)
               : chatProvider.messages.isEmpty
                   ? const Center(
                       child: Column(
@@ -341,65 +283,67 @@ class _ChatScreenState extends State<ChatScreen> {
                     )
                   : ListView.builder(
                       itemCount: chatProvider.messages.length,
-                      itemBuilder: (context, index) => _buildMessageTile(
-                        chatProvider.messages[index],
-                      ),
+                      itemBuilder: (context, index) =>
+                          _buildMessageTile(chatProvider.messages[index]),
                     ),
+      bottomSheet: _buildMessageInput(),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => chatProvider.refreshMessages(),
+        onPressed: chatProvider.refreshMessages,
         child: const Icon(Icons.refresh),
       ),
-      bottomSheet: _buildMessageInput(),
     );
   }
 }
 
 class HTTPStatusDemo {
   static void showRandomStatus(BuildContext context, ApiService apiService) {
-    final randomStatus = [200, 201, 400, 404, 500][DateTime.now().second % 5];
-    _showStatus(context, apiService, randomStatus);
+    final statusCodes = [200, 201, 400, 404, 500];
+    final randomCode = statusCodes[DateTime.now().second % statusCodes.length];
+    _showHTTPStatus(context, apiService, randomCode);
   }
 
   static void showStatusPicker(BuildContext context, ApiService apiService) {
+    final statusCodes = {
+      100: 'Continue',
+      200: 'OK',
+      201: 'Created',
+      400: 'Bad Request',
+      401: 'Unauthorized',
+      403: 'Forbidden',
+      404: 'Not Found',
+      418: "I'm a teapot",
+      500: 'Internal Server Error',
+      503: 'Service Unavailable',
+    };
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Select HTTP Status'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildStatusButton(context, apiService, 100, 'Continue'),
-            _buildStatusButton(context, apiService, 200, 'OK'),
-            _buildStatusButton(context, apiService, 201, 'Created'),
-            _buildStatusButton(context, apiService, 400, 'Bad Request'),
-            _buildStatusButton(context, apiService, 401, 'Unauthorized'),
-            _buildStatusButton(context, apiService, 403, 'Forbidden'),
-            _buildStatusButton(context, apiService, 404, 'Not Found'),
-            _buildStatusButton(context, apiService, 418, 'I\'m a teapot'),
-            _buildStatusButton(
-                context, apiService, 500, 'Internal Server Error'),
-            _buildStatusButton(context, apiService, 503, 'Service Unavailable'),
-          ],
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView(
+            shrinkWrap: true,
+            children: statusCodes.entries
+                .map(
+                  (entry) => ListTile(
+                    title: Text('${entry.key} ${entry.value}'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showHTTPStatus(context, apiService, entry.key);
+                    },
+                  ),
+                )
+                .toList(),
+          ),
         ),
       ),
     );
   }
 
-  static Widget _buildStatusButton(
-      BuildContext context, ApiService apiService, int code, String text) {
-    return TextButton(
-      onPressed: () {
-        Navigator.pop(context);
-        _showStatus(context, apiService, code);
-      },
-      child: Text('$code $text'),
-    );
-  }
-
-  static void _showStatus(
-      BuildContext context, ApiService apiService, int statusCode) async {
-    try {
-      final status = await apiService.getHTTPStatus(statusCode);
+  static void _showHTTPStatus(
+      BuildContext context, ApiService apiService, int statusCode) {
+    apiService.getHTTPStatus(statusCode).then((status) {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -409,22 +353,7 @@ class HTTPStatusDemo {
             children: [
               Text(status.description),
               const SizedBox(height: 16),
-              Image.network(
-                status.imageUrl,
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Center(
-                    child: CircularProgressIndicator(
-                      value: loadingProgress.expectedTotalBytes != null
-                          ? loadingProgress.cumulativeBytesLoaded /
-                              loadingProgress.expectedTotalBytes!
-                          : null,
-                    ),
-                  );
-                },
-                errorBuilder: (context, error, stackTrace) =>
-                    const Icon(Icons.error),
-              ),
+              Image.network(status.imageUrl),
             ],
           ),
           actions: [
@@ -435,10 +364,10 @@ class HTTPStatusDemo {
           ],
         ),
       );
-    } catch (e) {
+    }).catchError((e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to get status: $e')),
+        SnackBar(content: Text(e.toString())),
       );
-    }
+    });
   }
 }

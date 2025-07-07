@@ -7,7 +7,9 @@ class ApiService {
   static const Duration timeout = Duration(seconds: 30);
   late http.Client _client;
 
-  ApiService({http.Client? client}) : _client = client ?? http.Client();
+  ApiService({http.Client? client}) {
+    _client = client ?? http.Client();
+  }
 
   void dispose() {
     _client.close();
@@ -25,7 +27,7 @@ class ApiService {
     T Function(Map<String, dynamic>) fromJson,
   ) {
     if (response.statusCode >= 200 && response.statusCode < 300) {
-      final decodedData = jsonDecode(response.body);
+      final decodedData = json.decode(response.body);
       return fromJson(decodedData);
     } else if (response.statusCode >= 400 && response.statusCode < 500) {
       throw ApiException('Client error: ${response.statusCode}');
@@ -39,23 +41,19 @@ class ApiService {
   Future<List<Message>> getMessages() async {
     try {
       final response = await _client
-          .get(
-            Uri.parse('$baseUrl/api/messages'),
-            headers: _getHeaders(),
-          )
+          .get(Uri.parse('$baseUrl/api/messages'))
           .timeout(timeout);
 
       return _handleResponse<List<Message>>(
         response,
-        (json) => (json['data'] as List)
-            .map((messageJson) => Message.fromJson(messageJson))
-            .toList(),
+        (json) =>
+            (json['data'] as List).map((msg) => Message.fromJson(msg)).toList(),
       );
     } catch (e) {
-      if (e is http.ClientException) {
-        throw NetworkException('Network error: ${e.message}');
+      if (e is ApiException) {
+        rethrow;
       }
-      rethrow;
+      throw NetworkException('Network error: ${e.toString()}');
     }
   }
 
@@ -70,7 +68,7 @@ class ApiService {
           .post(
             Uri.parse('$baseUrl/api/messages'),
             headers: _getHeaders(),
-            body: jsonEncode(request.toJson()),
+            body: json.encode(request.toJson()),
           )
           .timeout(timeout);
 
@@ -79,10 +77,10 @@ class ApiService {
         (json) => Message.fromJson(json['data']),
       );
     } catch (e) {
-      if (e is http.ClientException) {
-        throw NetworkException('Network error: ${e.message}');
+      if (e is ApiException) {
+        rethrow;
       }
-      rethrow;
+      throw NetworkException('Network error: ${e.toString()}');
     }
   }
 
@@ -97,7 +95,7 @@ class ApiService {
           .put(
             Uri.parse('$baseUrl/api/messages/$id'),
             headers: _getHeaders(),
-            body: jsonEncode(request.toJson()),
+            body: json.encode(request.toJson()),
           )
           .timeout(timeout);
 
@@ -106,40 +104,34 @@ class ApiService {
         (json) => Message.fromJson(json['data']),
       );
     } catch (e) {
-      if (e is http.ClientException) {
-        throw NetworkException('Network error: ${e.message}');
+      if (e is ApiException) {
+        rethrow;
       }
-      rethrow;
+      throw NetworkException('Network error: ${e.toString()}');
     }
   }
 
   Future<void> deleteMessage(int id) async {
     try {
       final response = await _client
-          .delete(
-            Uri.parse('$baseUrl/api/messages/$id'),
-            headers: _getHeaders(),
-          )
+          .delete(Uri.parse('$baseUrl/api/messages/$id'))
           .timeout(timeout);
 
       if (response.statusCode != 204) {
         throw ApiException('Failed to delete message');
       }
     } catch (e) {
-      if (e is http.ClientException) {
-        throw NetworkException('Network error: ${e.message}');
+      if (e is ApiException) {
+        rethrow;
       }
-      rethrow;
+      throw NetworkException('Network error: ${e.toString()}');
     }
   }
 
   Future<HTTPStatusResponse> getHTTPStatus(int statusCode) async {
     try {
       final response = await _client
-          .get(
-            Uri.parse('$baseUrl/api/status/$statusCode'),
-            headers: _getHeaders(),
-          )
+          .get(Uri.parse('$baseUrl/api/status/$statusCode'))
           .timeout(timeout);
 
       return _handleResponse<HTTPStatusResponse>(
@@ -147,31 +139,24 @@ class ApiService {
         (json) => HTTPStatusResponse.fromJson(json['data']),
       );
     } catch (e) {
-      if (e is http.ClientException) {
-        throw NetworkException('Network error: ${e.message}');
+      if (e is ApiException) {
+        rethrow;
       }
-      rethrow;
+      throw NetworkException('Network error: ${e.toString()}');
     }
   }
 
   Future<Map<String, dynamic>> healthCheck() async {
     try {
-      final response = await _client
-          .get(
-            Uri.parse('$baseUrl/api/health'),
-            headers: _getHeaders(),
-          )
-          .timeout(timeout);
+      final response =
+          await _client.get(Uri.parse('$baseUrl/api/health')).timeout(timeout);
 
-      return _handleResponse<Map<String, dynamic>>(
-        response,
-        (json) => json['data'] as Map<String, dynamic>,
-      );
+      return json.decode(response.body);
     } catch (e) {
-      if (e is http.ClientException) {
-        throw NetworkException('Network error: ${e.message}');
+      if (e is ApiException) {
+        rethrow;
       }
-      rethrow;
+      throw NetworkException('Network error: ${e.toString()}');
     }
   }
 }

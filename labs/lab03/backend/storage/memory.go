@@ -51,7 +51,7 @@ func (ms *MemoryStorage) Create(username, content string) (*models.Message, erro
 	defer ms.mu.Unlock()
 
 	msg := models.NewMessage(ms.nextID, username, content)
-	ms.messages[ms.nextID] = msg
+	ms.messages[msg.ID] = msg
 	ms.nextID++
 	return msg, nil
 }

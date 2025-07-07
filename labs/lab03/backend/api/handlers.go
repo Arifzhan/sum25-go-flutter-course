@@ -27,13 +27,13 @@ func (h *Handler) SetupRoutes() *mux.Router {
 	router := mux.NewRouter()
 	router.Use(corsMiddleware)
 
-	api := router.PathPrefix("/api").Subrouter()
-	api.HandleFunc("/messages", h.GetMessages).Methods("GET")
-	api.HandleFunc("/messages", h.CreateMessage).Methods("POST")
-	api.HandleFunc("/messages/{id}", h.UpdateMessage).Methods("PUT")
-	api.HandleFunc("/messages/{id}", h.DeleteMessage).Methods("DELETE")
-	api.HandleFunc("/status/{code}", h.GetHTTPStatus).Methods("GET")
-	api.HandleFunc("/health", h.HealthCheck).Methods("GET")
+	apiRouter := router.PathPrefix("/api").Subrouter()
+	apiRouter.HandleFunc("/messages", h.GetMessages).Methods("GET")
+	apiRouter.HandleFunc("/messages", h.CreateMessage).Methods("POST")
+	apiRouter.HandleFunc("/messages/{id}", h.UpdateMessage).Methods("PUT")
+	apiRouter.HandleFunc("/messages/{id}", h.DeleteMessage).Methods("DELETE")
+	apiRouter.HandleFunc("/status/{code}", h.GetHTTPStatus).Methods("GET")
+	apiRouter.HandleFunc("/health", h.HealthCheck).Methods("GET")
 
 	return router
 }
@@ -60,7 +60,7 @@ func (h *Handler) CreateMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	message, err := h.storage.Create(req.Username, req.Content)
+	msg, err := h.storage.Create(req.Username, req.Content)
 	if err != nil {
 		h.writeError(w, http.StatusInternalServerError, "Failed to create message")
 		return
@@ -68,7 +68,7 @@ func (h *Handler) CreateMessage(w http.ResponseWriter, r *http.Request) {
 
 	h.writeJSON(w, http.StatusCreated, models.APIResponse{
 		Success: true,
-		Data:    message,
+		Data:    msg,
 	})
 }
 
@@ -92,7 +92,7 @@ func (h *Handler) UpdateMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	message, err := h.storage.Update(id, req.Content)
+	msg, err := h.storage.Update(id, req.Content)
 	if err != nil {
 		h.writeError(w, http.StatusNotFound, "Message not found")
 		return
@@ -100,7 +100,7 @@ func (h *Handler) UpdateMessage(w http.ResponseWriter, r *http.Request) {
 
 	h.writeJSON(w, http.StatusOK, models.APIResponse{
 		Success: true,
-		Data:    message,
+		Data:    msg,
 	})
 }
 
@@ -126,30 +126,29 @@ func (h *Handler) GetHTTPStatus(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	code, err := strconv.Atoi(vars["code"])
 	if err != nil || code < 100 || code > 599 {
-		h.writeError(w, http.StatusBadRequest, "Invalid HTTP status code")
+		h.writeError(w, http.StatusBadRequest, "Invalid status code")
 		return
+	}
+
+	response := models.HTTPStatusResponse{
+		StatusCode:  code,
+		ImageURL:    "https://http.cat/" + strconv.Itoa(code),
+		Description: getHTTPStatusDescription(code),
 	}
 
 	h.writeJSON(w, http.StatusOK, models.APIResponse{
 		Success: true,
-		Data: models.HTTPStatusResponse{
-			StatusCode:  code,
-			ImageURL:    "https://http.cat/" + vars["code"],
-			Description: getHTTPStatusDescription(code),
-		},
+		Data:    response,
 	})
 }
 
 // HealthCheck handles GET /api/health
 func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
-	h.writeJSON(w, http.StatusOK, models.APIResponse{
-		Success: true,
-		Data: map[string]interface{}{
-			"status":         "ok",
-			"message":        "API is running",
-			"timestamp":      time.Now(),
-			"total_messages": h.storage.Count(),
-		},
+	h.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":         "ok",
+		"message":        "API is running",
+		"timestamp":      time.Now().Format(time.RFC3339),
+		"total_messages": h.storage.Count(),
 	})
 }
 
@@ -188,8 +187,6 @@ func getHTTPStatusDescription(code int) string {
 		return "Bad Request"
 	case 401:
 		return "Unauthorized"
-	case 403:
-		return "Forbidden"
 	case 404:
 		return "Not Found"
 	case 500:
