@@ -34,7 +34,10 @@ class CreateMessageRequest {
   final String username;
   final String content;
 
-  CreateMessageRequest({required this.username, required this.content});
+  CreateMessageRequest({
+    required this.username,
+    required this.content,
+  });
 
   Map<String, dynamic> toJson() {
     return {
@@ -44,8 +47,8 @@ class CreateMessageRequest {
   }
 
   String? validate() {
-    if (username.isEmpty) return 'Username is required';
-    if (content.isEmpty) return 'Content is required';
+    if (username.isEmpty) return "Username is required";
+    if (content.isEmpty) return "Content is required";
     return null;
   }
 }
@@ -62,7 +65,7 @@ class UpdateMessageRequest {
   }
 
   String? validate() {
-    if (content.isEmpty) return 'Content is required';
+    if (content.isEmpty) return "Content is required";
     return null;
   }
 }
@@ -92,17 +95,22 @@ class ApiResponse<T> {
   final T? data;
   final String? error;
 
-  ApiResponse({required this.success, this.data, this.error});
+  ApiResponse({
+    required this.success,
+    this.data,
+    this.error,
+  });
 
   factory ApiResponse.fromJson(
     Map<String, dynamic> json,
     T Function(Map<String, dynamic>)? fromJsonT,
   ) {
-    return ApiResponse(
-        success: json['success'],
-        data: json['data'] != null && fromJsonT != null
-            ? fromJsonT(json['data'])
-            : null,
-        error: json['error']);
+    return ApiResponse<T>(
+      success: json['success'],
+      data: json['data'] != null
+          ? (fromJsonT != null ? fromJsonT(json['data']) : json['data'])
+          : null,
+      error: json['error'],
+    );
   }
 }
