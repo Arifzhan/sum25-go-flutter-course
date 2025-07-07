@@ -24,16 +24,16 @@ class ApiService {
     http.Response response,
     T Function(Map<String, dynamic>) fromJson,
   ) {
-    final decoded = json.decode(response.body);
-
-    if (response.statusCode >= 200 && response.statusCode <= 299) {
-      return fromJson(decoded);
-    } else if (response.statusCode >= 400 && response.statusCode <= 499) {
-      throw ApiException(decoded['error'] ?? 'Client error');
-    } else if (response.statusCode >= 500 && response.statusCode <= 599) {
-      throw ServerException('Server error: ${response.statusCode}');
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      final decodedData = jsonDecode(response.body);
+      return fromJson(decodedData['data']);
+    } else if (response.statusCode >= 400 && response.statusCode < 500) {
+      final error = jsonDecode(response.body)['error'] ?? 'Client error';
+      throw ApiException(error);
+    } else if (response.statusCode >= 500) {
+      throw ServerException('Server error');
     } else {
-      throw ApiException('Unexpected status code: ${response.statusCode}');
+      throw ApiException('Unexpected error: ${response.statusCode}');
     }
   }
 
@@ -48,9 +48,7 @@ class ApiService {
 
       return _handleResponse<List<Message>>(
         response,
-        (json) => (json['data'] as List)
-            .map((messageJson) => Message.fromJson(messageJson))
-            .toList(),
+        (data) => (data as List).map((e) => Message.fromJson(e)).toList(),
       );
     } catch (e) {
       if (e is ApiException) rethrow;
@@ -59,22 +57,21 @@ class ApiService {
   }
 
   Future<Message> createMessage(CreateMessageRequest request) async {
-    final validationError = request.validate();
-    if (validationError != null) throw ValidationException(validationError);
-
     try {
+      final validationError = request.validate();
+      if (validationError != null) {
+        throw ValidationException(validationError);
+      }
+
       final response = await _client
           .post(
             Uri.parse('$baseUrl/api/messages'),
             headers: _getHeaders(),
-            body: json.encode(request.toJson()),
+            body: jsonEncode(request.toJson()),
           )
           .timeout(timeout);
 
-      return _handleResponse<Message>(
-        response,
-        (json) => Message.fromJson(json['data']),
-      );
+      return _handleResponse<Message>(response, Message.fromJson);
     } catch (e) {
       if (e is ApiException) rethrow;
       throw NetworkException('Network error: ${e.toString()}');
@@ -82,22 +79,21 @@ class ApiService {
   }
 
   Future<Message> updateMessage(int id, UpdateMessageRequest request) async {
-    final validationError = request.validate();
-    if (validationError != null) throw ValidationException(validationError);
-
     try {
+      final validationError = request.validate();
+      if (validationError != null) {
+        throw ValidationException(validationError);
+      }
+
       final response = await _client
           .put(
             Uri.parse('$baseUrl/api/messages/$id'),
             headers: _getHeaders(),
-            body: json.encode(request.toJson()),
+            body: jsonEncode(request.toJson()),
           )
           .timeout(timeout);
 
-      return _handleResponse<Message>(
-        response,
-        (json) => Message.fromJson(json['data']),
-      );
+      return _handleResponse<Message>(response, Message.fromJson);
     } catch (e) {
       if (e is ApiException) rethrow;
       throw NetworkException('Network error: ${e.toString()}');
@@ -123,11 +119,11 @@ class ApiService {
   }
 
   Future<HTTPStatusResponse> getHTTPStatus(int statusCode) async {
-    if (statusCode < 100 || statusCode > 599) {
-      throw ValidationException('Invalid HTTP status code: $statusCode');
-    }
-
     try {
+      if (statusCode < 100 || statusCode >= 600) {
+        throw ValidationException('Invalid status code');
+      }
+
       final response = await _client
           .get(
             Uri.parse('$baseUrl/api/status/$statusCode'),
@@ -136,9 +132,7 @@ class ApiService {
           .timeout(timeout);
 
       return _handleResponse<HTTPStatusResponse>(
-        response,
-        (json) => HTTPStatusResponse.fromJson(json['data']),
-      );
+          response, HTTPStatusResponse.fromJson);
     } catch (e) {
       if (e is ApiException) rethrow;
       throw NetworkException('Network error: ${e.toString()}');
@@ -154,10 +148,11 @@ class ApiService {
           )
           .timeout(timeout);
 
-      return _handleResponse<Map<String, dynamic>>(
-        response,
-        (json) => json['data'],
-      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw ApiException('Health check failed');
+      }
     } catch (e) {
       if (e is ApiException) rethrow;
       throw NetworkException('Network error: ${e.toString()}');
